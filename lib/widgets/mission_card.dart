@@ -5,7 +5,7 @@ class MissionCard extends StatelessWidget {
   final bool completed;
   final VoidCallback onTap;
 
-  MissionCard({
+  const MissionCard({super.key, 
     required this.title,
     required this.completed,
     required this.onTap,

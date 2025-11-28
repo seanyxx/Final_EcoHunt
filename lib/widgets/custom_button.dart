@@ -7,7 +7,7 @@ class CustomButton extends StatelessWidget {
   final Color textColor;
   final double borderRadius;
 
-  CustomButton({
+  const CustomButton({super.key, 
     required this.text,
     required this.onPressed,
     this.backgroundColor = Colors.green,
