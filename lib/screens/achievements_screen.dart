@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/local_storage.dart';
 
 class AchievementsScreen extends StatefulWidget {
-  AchievementsScreen({super.key});
+  const AchievementsScreen({super.key});
 
   @override
   _AchievementsScreenState createState() => _AchievementsScreenState();
@@ -39,7 +39,10 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Achievements', style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Achievements',
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: Colors.green.shade600,
         elevation: 0,
       ),
@@ -65,7 +68,9 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                 trailing: Text(
                   "+${item['points']} pts",
                   style: TextStyle(
-                    color: completed ? Colors.green.shade700 : Colors.grey.shade400,
+                    color: completed
+                        ? Colors.green.shade700
+                        : Colors.grey.shade400,
                     fontWeight: FontWeight.bold,
                   ),
                 ),

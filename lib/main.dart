@@ -1,11 +1,13 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
 import 'screens/splash_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/profile_screen.dart';
+import 'screens/settings_screen.dart';
+import 'screens/achievements_screen.dart';
 
 void main() {
-  runApp(EcoHuntApp());
+  runApp(const EcoHuntApp());
 }
 
 class EcoHuntApp extends StatelessWidget {
@@ -20,16 +22,14 @@ class EcoHuntApp extends StatelessWidget {
         textTheme: Typography.blackMountainView.apply(fontSizeFactor: 1.0),
         scaffoldBackgroundColor: Colors.white,
       ),
-      home: SplashScreen(),
+      home: const SplashScreen(),
       routes: {
-        '/onboarding': (_) => OnboardingScreen(),
-        '/home': (_) => HomeScreen(),
+        '/onboarding': (_) => const OnboardingScreen(),
+        '/home': (_) => const HomeScreen(),
+        '/profile': (_) => const ProfileScreen(),
+        '/settings': (_) => const SettingsScreen(),
+        '/achievements': (_) => const AchievementsScreen(),
       },
     );
   }
 }
-
-// NOTE TO TEAM:
-// The original combined UI code has now been removed from main.dart.
-// Next steps: create the files inside /screens and /widgets folders.
-// I will generate each file when you say "Create the screens folder now."

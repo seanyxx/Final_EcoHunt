@@ -13,7 +13,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int points = 0;
   int streak = 0;
-
   List<Mission> missions = [];
 
   @override
@@ -30,8 +29,8 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       points = loadedPoints;
       streak = loadedStreak;
+
       if (loadedMissions.isEmpty) {
-        // initialize defaults if none saved
         missions = [
           Mission(title: 'Turn off unused lights'),
           Mission(title: 'Use a reusable bottle', completed: true),
@@ -43,17 +42,17 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
 
-    // Ensure achievements reflect current data
     await _updateAchievements();
   }
 
   void toggleMission(int index) {
     final wasCompleted = missions[index].completed;
+
     setState(() {
       missions[index].completed = !wasCompleted;
     });
 
-    // Update points: add when marking completed, subtract when unmarking
+    // Add or remove points
     if (!wasCompleted && missions[index].completed) {
       points += missions[index].points;
     } else if (wasCompleted && !missions[index].completed) {
@@ -61,37 +60,23 @@ class _HomeScreenState extends State<HomeScreen> {
       if (points < 0) points = 0;
     }
 
-    // Persist changes
     LocalStorage.saveMissions(missions);
     LocalStorage.savePoints(points);
-
-    // Recompute achievements and persist
     _updateAchievements();
   }
 
   Future<void> _updateAchievements() async {
     final completedCount = missions.where((m) => m.completed).length;
-    final List<Map<String, dynamic>> achievements = [
+
+    final achievements = [
       {
         'title': 'First Mission Completed',
         'points': 10,
         'completed': completedCount >= 1,
       },
-      {
-        'title': '3-Day Streak',
-        'points': 30,
-        'completed': streak >= 3,
-      },
-      {
-        'title': '5 Eco Tasks',
-        'points': 50,
-        'completed': completedCount >= 5,
-      },
-      {
-        'title': 'Green Hero',
-        'points': 100,
-        'completed': points >= 100,
-      },
+      {'title': '3-Day Streak', 'points': 30, 'completed': streak >= 3},
+      {'title': '5 Eco Tasks', 'points': 50, 'completed': completedCount >= 5},
+      {'title': 'Green Hero', 'points': 100, 'completed': points >= 100},
     ];
 
     await LocalStorage.saveAchievements(achievements);
@@ -99,6 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _addMissionDialog() async {
     final controller = TextEditingController();
+
     final result = await showDialog<String?>(
       context: context,
       builder: (context) => AlertDialog(
@@ -121,8 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     if (result != null && result.isNotEmpty) {
-      final newMission = Mission(title: result);
-      setState(() => missions.add(newMission));
+      setState(() => missions.add(Mission(title: result)));
       await LocalStorage.saveMissions(missions);
     }
   }
@@ -130,6 +115,59 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // --------------------------------------------------------
+      // 🟢 Navigation Drawer (Restores Profile/Settings/etc.)
+      // --------------------------------------------------------
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(color: Colors.green.shade600),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(Icons.eco, size: 50, color: Colors.white),
+                  SizedBox(height: 10),
+                  Text(
+                    'EcoHunt Menu',
+                    style: TextStyle(color: Colors.white, fontSize: 20),
+                  ),
+                ],
+              ),
+            ),
+
+            // Home
+            ListTile(
+              leading: Icon(Icons.home, color: Colors.green.shade700),
+              title: const Text('Home'),
+              onTap: () => Navigator.pushReplacementNamed(context, '/home'),
+            ),
+
+            // Profile
+            ListTile(
+              leading: Icon(Icons.person, color: Colors.green.shade700),
+              title: const Text('Profile'),
+              onTap: () => Navigator.pushNamed(context, '/profile'),
+            ),
+
+            // Achievements
+            ListTile(
+              leading: Icon(Icons.star, color: Colors.green.shade700),
+              title: const Text('Achievements'),
+              onTap: () => Navigator.pushNamed(context, '/achievements'),
+            ),
+
+            // Settings
+            ListTile(
+              leading: Icon(Icons.settings, color: Colors.green.shade700),
+              title: const Text('Settings'),
+              onTap: () => Navigator.pushNamed(context, '/settings'),
+            ),
+          ],
+        ),
+      ),
+
       appBar: AppBar(
         backgroundColor: Colors.green.shade600,
         elevation: 0,
@@ -142,7 +180,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
       body: Column(
         children: [
-          // Header Section
+          // --------------------------------------------------------
+          // 🟩 Header Section: Points + Streak
+          // --------------------------------------------------------
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -157,7 +197,10 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Column(
                   children: [
-                    const Text('Points', style: TextStyle(color: Colors.white70)),
+                    const Text(
+                      'Points',
+                      style: TextStyle(color: Colors.white70),
+                    ),
                     Text(
                       '$points',
                       style: const TextStyle(
@@ -170,7 +213,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 Column(
                   children: [
-                    const Text('Streak', style: TextStyle(color: Colors.white70)),
+                    const Text(
+                      'Streak',
+                      style: TextStyle(color: Colors.white70),
+                    ),
                     Text(
                       '$streak days',
                       style: const TextStyle(
@@ -187,7 +233,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
           const SizedBox(height: 20),
 
-          // Daily Missions Header
+          // --------------------------------------------------------
+          // Missions Header
+          // --------------------------------------------------------
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20.0),
             child: Row(
@@ -204,13 +252,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
           const SizedBox(height: 10),
 
+          // --------------------------------------------------------
           // Mission List
+          // --------------------------------------------------------
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               itemCount: missions.length,
               itemBuilder: (context, index) {
                 final completed = missions[index].completed;
+
                 return GestureDetector(
                   onTap: () => toggleMission(index),
                   child: Container(
@@ -224,7 +275,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Row(
                       children: [
                         Icon(
-                          completed ? Icons.check_circle : Icons.circle_outlined,
+                          completed
+                              ? Icons.check_circle
+                              : Icons.circle_outlined,
                           color: completed ? Colors.green : Colors.grey,
                           size: 30,
                         ),
@@ -234,8 +287,12 @@ class _HomeScreenState extends State<HomeScreen> {
                             missions[index].title,
                             style: TextStyle(
                               fontSize: 18,
-                              decoration: completed ? TextDecoration.lineThrough : TextDecoration.none,
-                              color: completed ? Colors.green.shade800 : Colors.black,
+                              decoration: completed
+                                  ? TextDecoration.lineThrough
+                                  : TextDecoration.none,
+                              color: completed
+                                  ? Colors.green.shade800
+                                  : Colors.black,
                             ),
                           ),
                         ),
