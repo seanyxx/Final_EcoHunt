@@ -1,90 +1,135 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-
 import '../data/local_storage.dart';
 import '../models/mission_model.dart';
+import 'profile_screen.dart';
+import 'achievements_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  _HomeScreenState createState() => _HomeScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  int _currentIndex = 0;
+
+  // ===== Home Screen Data =====
   int points = 0;
-  int streak = 0;
+  int streakMinutes = 0;
   List<Mission> missions = [];
+
+  DateTime? lastStreakIncrementTime; // Last minute increment time
+  bool completedThisMinute =
+      false; // Track if a mission was completed in the current minute
+  Timer? _streakTimer;
+
+  final _tabs = const [
+    Center(child: Text('Home Placeholder')), // will replace in build
+    ProfileScreen(),
+    AchievementsScreen(),
+    SettingsScreen(),
+  ];
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _startStreakTimer();
+  }
+
+  @override
+  void dispose() {
+    _streakTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
     final loadedMissions = await LocalStorage.loadMissions();
     final loadedPoints = await LocalStorage.loadPoints();
     final loadedStreak = await LocalStorage.loadStreak();
+    final lastIncrement = await LocalStorage.loadLastStreakTime();
 
     setState(() {
       points = loadedPoints;
-      streak = loadedStreak;
-
-      if (loadedMissions.isEmpty) {
-        missions = [
-          Mission(title: 'Turn off unused lights'),
-          Mission(title: 'Use a reusable bottle', completed: true),
-          Mission(title: 'Segregate your waste properly'),
-        ];
-        LocalStorage.saveMissions(missions);
-      } else {
-        missions = loadedMissions;
-      }
+      streakMinutes = loadedStreak;
+      lastStreakIncrementTime = lastIncrement;
+      missions = loadedMissions.isNotEmpty
+          ? loadedMissions
+          : [
+              Mission(title: 'Turn off unused lights'),
+              Mission(title: 'Use a reusable bottle'),
+              Mission(title: 'Segregate your waste properly'),
+            ];
     });
-
-    await _updateAchievements();
   }
 
-  void toggleMission(int index) {
-    final wasCompleted = missions[index].completed;
+  void _startStreakTimer() {
+    _streakTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+      final now = DateTime.now();
 
+      if (lastStreakIncrementTime == null) {
+        lastStreakIncrementTime = now;
+        await LocalStorage.saveLastStreakTime(now);
+        return;
+      }
+
+      final diffMinutes = now.difference(lastStreakIncrementTime!).inMinutes;
+
+      if (diffMinutes >= 1) {
+        // If a mission was completed during the last minute, increment
+        if (completedThisMinute) {
+          streakMinutes += 1;
+        } else {
+          streakMinutes = 0; // Reset streak if no mission was completed
+        }
+
+        completedThisMinute = false; // Reset for next minute
+        lastStreakIncrementTime = now;
+        await LocalStorage.saveStreak(streakMinutes);
+        await LocalStorage.saveLastStreakTime(now);
+
+        setState(() {});
+        _updateAchievements();
+      }
+    });
+  }
+
+  // ===== Toggle Mission Completion =====
+  Future<void> toggleMission(int index) async {
+    final mission = missions[index];
     setState(() {
-      missions[index].completed = !wasCompleted;
+      mission.completed = !mission.completed;
     });
 
-    // Add or remove points
-    if (!wasCompleted && missions[index].completed) {
-      points += missions[index].points;
-    } else if (wasCompleted && !missions[index].completed) {
-      points -= missions[index].points;
+    // Update points
+    if (mission.completed) {
+      points += mission.points;
+    } else {
+      points -= mission.points;
       if (points < 0) points = 0;
     }
 
-    LocalStorage.saveMissions(missions);
-    LocalStorage.savePoints(points);
+    await LocalStorage.saveMissions(missions);
+    await LocalStorage.savePoints(points);
+
+    // Mark that a mission was completed in this minute
+    if (mission.completed) completedThisMinute = true;
+
     _updateAchievements();
   }
 
-  Future<void> _updateAchievements() async {
-    final completedCount = missions.where((m) => m.completed).length;
-
-    final achievements = [
-      {
-        'title': 'First Mission Completed',
-        'points': 10,
-        'completed': completedCount >= 1,
-      },
-      {'title': '3-Day Streak', 'points': 30, 'completed': streak >= 3},
-      {'title': '5 Eco Tasks', 'points': 50, 'completed': completedCount >= 5},
-      {'title': 'Green Hero', 'points': 100, 'completed': points >= 100},
-    ];
-
-    await LocalStorage.saveAchievements(achievements);
+  Future<void> _deleteMission(int index) async {
+    setState(() {
+      missions.removeAt(index);
+    });
+    await LocalStorage.saveMissions(missions);
   }
 
   Future<void> _addMissionDialog() async {
     final controller = TextEditingController();
-
     final result = await showDialog<String?>(
       context: context,
       builder: (context) => AlertDialog(
@@ -107,82 +152,76 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     if (result != null && result.isNotEmpty) {
-      setState(() => missions.add(Mission(title: result)));
+      final newMission = Mission(title: result);
+      setState(() => missions.add(newMission));
       await LocalStorage.saveMissions(missions);
     }
   }
 
+  Future<void> _updateAchievements() async {
+    final completedCount = missions.where((m) => m.completed).length;
+    final achievements = [
+      {
+        'title': 'First Mission Completed',
+        'points': 10,
+        'completed': completedCount >= 1,
+      },
+      {
+        'title': '3-Minute Streak',
+        'points': 30,
+        'completed': streakMinutes >= 3,
+      },
+      {'title': '5 Eco Tasks', 'points': 50, 'completed': completedCount >= 5},
+      {'title': 'Green Hero', 'points': 100, 'completed': points >= 100},
+    ];
+    await LocalStorage.saveAchievements(achievements);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final tabs = [
+      _buildHomeTab(),
+      const ProfileScreen(),
+      const AchievementsScreen(),
+      const SettingsScreen(),
+    ];
+
     return Scaffold(
-      // --------------------------------------------------------
-      // 🟢 Navigation Drawer (Restores Profile/Settings/etc.)
-      // --------------------------------------------------------
-      drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            DrawerHeader(
-              decoration: BoxDecoration(color: Colors.green.shade600),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.eco, size: 50, color: Colors.white),
-                  SizedBox(height: 10),
-                  Text(
-                    'EcoHunt Menu',
-                    style: TextStyle(color: Colors.white, fontSize: 20),
-                  ),
-                ],
-              ),
-            ),
-
-            // Home
-            ListTile(
-              leading: Icon(Icons.home, color: Colors.green.shade700),
-              title: const Text('Home'),
-              onTap: () => Navigator.pushReplacementNamed(context, '/home'),
-            ),
-
-            // Profile
-            ListTile(
-              leading: Icon(Icons.person, color: Colors.green.shade700),
-              title: const Text('Profile'),
-              onTap: () => Navigator.pushNamed(context, '/profile'),
-            ),
-
-            // Achievements
-            ListTile(
-              leading: Icon(Icons.star, color: Colors.green.shade700),
-              title: const Text('Achievements'),
-              onTap: () => Navigator.pushNamed(context, '/achievements'),
-            ),
-
-            // Settings
-            ListTile(
-              leading: Icon(Icons.settings, color: Colors.green.shade700),
-              title: const Text('Settings'),
-              onTap: () => Navigator.pushNamed(context, '/settings'),
-            ),
-          ],
-        ),
+      body: tabs[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        selectedItemColor: Colors.green.shade600,
+        unselectedItemColor: Colors.grey,
+        type: BottomNavigationBarType.fixed,
+        onTap: (index) => setState(() => _currentIndex = index),
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.emoji_events),
+            label: 'Achievements',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
+        ],
       ),
+      floatingActionButton: _currentIndex == 0
+          ? FloatingActionButton(
+              onPressed: _addMissionDialog,
+              backgroundColor: Colors.green.shade600,
+              child: const Icon(Icons.add, color: Colors.white),
+            )
+          : null,
+    );
+  }
 
-      appBar: AppBar(
-        backgroundColor: Colors.green.shade600,
-        elevation: 0,
-        title: const Text(
-          'EcoHunt',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-        ),
-        centerTitle: true,
-      ),
-
-      body: Column(
+  Widget _buildHomeTab() {
+    return SafeArea(
+      child: Column(
         children: [
-          // --------------------------------------------------------
-          // 🟩 Header Section: Points + Streak
-          // --------------------------------------------------------
+          // Header: Points and Streak
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -214,11 +253,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 Column(
                   children: [
                     const Text(
-                      'Streak',
+                      'Day-Streak (minute based for demo)',
                       style: TextStyle(color: Colors.white70),
                     ),
                     Text(
-                      '$streak days',
+                      '$streakMinutes',
                       style: const TextStyle(
                         fontSize: 24,
                         color: Colors.white,
@@ -230,86 +269,63 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-
           const SizedBox(height: 20),
 
-          // --------------------------------------------------------
-          // Missions Header
-          // --------------------------------------------------------
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Text(
-                  "Today's Missions",
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                Icon(Icons.event_available, color: Colors.green),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          // --------------------------------------------------------
-          // Mission List
-          // --------------------------------------------------------
+          // Missions List
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               itemCount: missions.length,
               itemBuilder: (context, index) {
-                final completed = missions[index].completed;
-
-                return GestureDetector(
-                  onTap: () => toggleMission(index),
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: completed ? Colors.green.shade100 : Colors.white,
-                      borderRadius: BorderRadius.circular(15),
-                      border: Border.all(color: Colors.green.shade300),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          completed
+                final mission = missions[index];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: mission.completed
+                        ? Colors.green.shade100
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.green.shade300),
+                  ),
+                  child: Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => toggleMission(index),
+                        child: Icon(
+                          mission.completed
                               ? Icons.check_circle
                               : Icons.circle_outlined,
-                          color: completed ? Colors.green : Colors.grey,
+                          color: mission.completed ? Colors.green : Colors.grey,
                           size: 30,
                         ),
-                        const SizedBox(width: 15),
-                        Expanded(
-                          child: Text(
-                            missions[index].title,
-                            style: TextStyle(
-                              fontSize: 18,
-                              decoration: completed
-                                  ? TextDecoration.lineThrough
-                                  : TextDecoration.none,
-                              color: completed
-                                  ? Colors.green.shade800
-                                  : Colors.black,
-                            ),
+                      ),
+                      const SizedBox(width: 15),
+                      Expanded(
+                        child: Text(
+                          mission.title,
+                          style: TextStyle(
+                            fontSize: 18,
+                            decoration: mission.completed
+                                ? TextDecoration.lineThrough
+                                : TextDecoration.none,
+                            color: mission.completed
+                                ? Colors.green.shade800
+                                : Colors.black,
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () => _deleteMission(index),
+                      ),
+                    ],
                   ),
                 );
               },
             ),
           ),
         ],
-      ),
-
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.green.shade600,
-        onPressed: _addMissionDialog,
-        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
