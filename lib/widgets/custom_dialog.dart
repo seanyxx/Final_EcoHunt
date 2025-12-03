@@ -6,7 +6,7 @@ class CustomDialog extends StatelessWidget {
   final VoidCallback onConfirm;
   final VoidCallback onCancel;
 
-  CustomDialog({
+  const CustomDialog({super.key, 
     required this.title,
     required this.content,
     required this.onConfirm,

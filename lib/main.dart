@@ -9,6 +9,8 @@ void main() {
 }
 
 class EcoHuntApp extends StatelessWidget {
+  const EcoHuntApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(

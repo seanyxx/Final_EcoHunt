@@ -9,7 +9,7 @@ class Mission {
     this.completed = false,
     this.points = 10,
     DateTime? date,
-  }) : this.date = date ?? DateTime.now();
+  }) : date = date ?? DateTime.now();
 
   // Convert Mission object to Map (for local storage)
   Map<String, dynamic> toMap() {
